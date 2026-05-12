@@ -1,5 +1,4 @@
 import json
-import html
 import streamlit as st
 from openai import OpenAI
 import streamlit.components.v1 as components
@@ -19,82 +18,164 @@ st.markdown("""
         margin-bottom: 5px; letter-spacing: -1px;
     }
     .groq-subtitle { color: #888; font-size: 1.1rem; font-weight: 400; }
-   
+
     div[data-testid="stFormSubmitButton"] > button {
         background: linear-gradient(90deg, #00b4ff, #0090cc) !important;
         color: white !important; border: none !important; border-radius: 8px !important;
         font-weight: bold !important; font-size: 16px !important;
     }
-    div[data-testid="stFormSubmitButton"] > button:hover { 
-        transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 180, 255, 0.5) !important; 
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 180, 255, 0.5) !important;
     }
-    
-    .result-box, .input-container {
-        background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(10px); color: #f0f0f0;
-        padding: 18px 20px;
-        border-radius: 12px; border-left: 4px solid #00b4ff;
-        border-top: 1px solid #333; border-right: 1px solid #333; border-bottom: 1px solid #333;
-        font-size: 16px; line-height: 1.5;
-        white-space: pre-wrap; min-height: 100px; margin-top: 10px; margin-bottom: 15px;
-        position: relative;
-    }
+
     .result-header { font-size: 18px; font-weight: bold; color: #00b4ff; display: flex; align-items: center; gap: 8px; margin-top: 10px;}
-   
-    /* NÚT COPY & XÓA KHI HOVER */
-    .hover-btn {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: rgba(0, 180, 255, 0.15);
-        color: #00b4ff;
-        border: none;
-        border-radius: 6px;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        opacity: 0;
-        transition: all 0.2s ease;
-        font-size: 18px;
-    }
-    .result-box:hover .hover-btn,
-    .input-container:hover .hover-btn {
-        opacity: 1;
-    }
-    .hover-btn:hover {
-        background: rgba(0, 180, 255, 0.3);
-        transform: scale(1.1);
-    }
 
     footer {visibility: hidden;}
     .stTextArea textarea { font-size: 15.5px !important; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
-# Hàm Copy (dùng cho nút chính)
-def render_custom_copy_button(text_to_copy, label_icon="📋"):
-    js_text = json.dumps(text_to_copy)
-    html_code = f"""
-    <style>
-        .st-copy-btn {{background-color:#262730;border:1px solid rgba(250,250,250,0.2);color:white;
-        border-radius:8px;padding:0;font-size:16px;cursor:pointer;width:100%;height:40px;
-        display:flex;align-items:center;justify-content:center;}}
-        .st-copy-btn:hover {{border-color:#00b4ff;color:#00b4ff;}}
-    </style>
-    <button class="st-copy-btn" id="copyBtn" onclick='copyToClipboard()'>{label_icon}</button>
-    <script>
-    function copyToClipboard() {{
-        navigator.clipboard.writeText({js_text}).then(function() {{
-            var btn = document.getElementById('copyBtn');
-            btn.innerHTML = '✅';
-            setTimeout(function() {{ btn.innerHTML = '{label_icon}'; }}, 2000);
-        }});
-    }}
-    </script>
+
+# ================== RENDER RESULT BOX (FIX COPY + FIX HEIGHT + FIX THEME) ==================
+def render_result_box(placeholder, label, text):
     """
-    components.html(html_code, height=45)
+    Render result box bên trong components.html() để có quyền clipboard-write.
+    - Height: Cải thiện công thức tính hào phóng hơn để không bị cắt chữ.
+    - Theme: Hardcode dark style, không phụ thuộc Streamlit theme setting.
+    - Khung linh hoạt: Bật overflow-y và custom thanh cuộn phòng hờ nội dung siêu dài.
+    """
+    safe_text = json.dumps(text)
+
+    # Chia dòng an toàn hơn (giảm xuống 22 ký tự/dòng để bao trọn các từ bị rớt dòng)
+    CHARS_PER_LINE = 22
+    lines = text.split('\n')
+    total_lines = sum((len(line) // CHARS_PER_LINE) + 1 for line in lines)
+    
+    # Tính toán chiều cao thoải mái (tăng buffer lên 100px)
+    height = max(180, 40 + 32 + (total_lines * 28) + 100)
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        /* Force dark — không để Streamlit theme ảnh hưởng */
+        html, body {{
+            background: transparent !important;
+            /* Đổi từ hidden sang auto để cho phép cuộn nếu vượt quá khung */
+            overflow-y: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }}
+        
+        /* Tùy chỉnh thanh cuộn cho thanh lịch, hợp với dark theme */
+        ::-webkit-scrollbar {{ width: 6px; }}
+        ::-webkit-scrollbar-track {{ background: transparent; }}
+        ::-webkit-scrollbar-thumb {{ background: #444; border-radius: 10px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: #00b4ff; }}
+
+        .result-box {{
+            background: #1e1e1e !important;
+            color: #f0f0f0 !important;
+            padding: 16px 50px 16px 18px;
+            border-radius: 12px;
+            border-left: 4px solid #00b4ff;
+            border-top: 1px solid #3a3a3a;
+            border-right: 1px solid #3a3a3a;
+            border-bottom: 1px solid #3a3a3a;
+            font-size: 15px;
+            line-height: 1.65;
+            word-break: break-word;
+            position: relative;
+            margin: 4px 0 8px 0;
+            min-height: 100%;
+        }}
+        .label {{
+            font-weight: 700;
+            color: #00b4ff !important;
+            font-size: 15px;
+            margin-bottom: 10px;
+            display: block;
+        }}
+        .content {{
+            color: #f0f0f0 !important;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }}
+        .hover-btn {{
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0, 180, 255, 0.15);
+            color: #00b4ff;
+            border: 1px solid rgba(0,180,255,0.2);
+            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.15s ease;
+            font-size: 16px;
+        }}
+        .result-box:hover .hover-btn {{ opacity: 1; }}
+        .hover-btn:hover {{
+            background: rgba(0, 180, 255, 0.3);
+            transform: scale(1.1);
+        }}
+    </style>
+    </head>
+    <body>
+    <div class="result-box" id="box">
+        <span class="label">{label}</span>
+        <div class="content" id="content"></div>
+        <button class="hover-btn" id="copyBtn" onclick="copyText()" title="Copy">📋</button>
+    </div>
+    <script>
+        document.getElementById('content').textContent = {safe_text};
+
+        function copyText() {{
+            var btn = document.getElementById('copyBtn');
+            var textVal = {safe_text};
+            if (navigator.clipboard && navigator.clipboard.writeText) {{
+                navigator.clipboard.writeText(textVal).then(function() {{
+                    btn.innerHTML = '✅';
+                    setTimeout(function() {{ btn.innerHTML = '📋'; }}, 1800);
+                }}).catch(function() {{ fallbackCopy(textVal, btn); }});
+            }} else {{
+                fallbackCopy(textVal, btn);
+            }}
+        }}
+
+        function fallbackCopy(text, btn) {{
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            ta.style.top  = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            try {{
+                document.execCommand('copy');
+                btn.innerHTML = '✅';
+            }} catch(e) {{
+                btn.innerHTML = '❌';
+            }}
+            setTimeout(function() {{ btn.innerHTML = '📋'; }}, 1800);
+            document.body.removeChild(ta);
+        }}
+    </script>
+    </body>
+    </html>
+    """
+    placeholder.empty()
+    with placeholder:
+        # Bật scrolling=True để nếu nội dung quá dài, nó sẽ xuất hiện thanh cuộn đẹp mắt thay vì ẩn mất chữ
+        components.html(html_content, height=height, scrolling=True)
+
 
 # ================== 2. CẤU HÌNH 2 API ==================
 groq_client = OpenAI(api_key=st.secrets["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
@@ -124,14 +205,21 @@ dict_prompt_str = "\n".join([f"- {k} -> {v}" for k, v in DICT_JP_VI.items()])
 
 # ================== 4. SESSION STATE ==================
 if "is_jp_to_vi" not in st.session_state:
-    st.session_state.is_jp_to_vi = False   # Mặc định: Việt → Nhật
+    st.session_state.is_jp_to_vi = False
 if "main_input" not in st.session_state:
     st.session_state["main_input"] = ""
 if "history" not in st.session_state:
     st.session_state.history = []
+# Lưu kết quả dịch để re-render sau khi rerun
+if "last_groq" not in st.session_state:
+    st.session_state.last_groq = ""
+if "last_deep" not in st.session_state:
+    st.session_state.last_deep = ""
 
 def clear_text():
     st.session_state["main_input"] = ""
+    st.session_state.last_groq = ""
+    st.session_state.last_deep = ""
 
 # ================== 5. UI TEXT ==================
 UI_TEXT = {
@@ -160,7 +248,7 @@ UI_TEXT = {
 current_lang_key = "jp_to_vi" if st.session_state.is_jp_to_vi else "vi_to_jp"
 ui = UI_TEXT[current_lang_key]
 
-# ================== SIDEBAR - LỊCH SỬ DỊCH ==================
+# ================== SIDEBAR ==================
 with st.sidebar:
     st.markdown("### 📜 Lịch sử dịch gần đây")
     if st.session_state.history:
@@ -171,7 +259,7 @@ with st.sidebar:
     else:
         st.caption("Chưa có bản dịch nào.")
 
-# ================== 6. SYSTEM PROMPT GỐC CỦA BẠN (KHÔNG SỬA) ==================
+# ================== 6. SYSTEM PROMPT ==================
 if st.session_state.is_jp_to_vi:
     sys_msg = f"""You are an expert Japanese to Vietnamese translator for a Manga Retouching and Graphic Design team.
 Your task is to translate work instructions from Japanese clients into accurate, actionable, and natural Vietnamese for professional retouchers.
@@ -243,15 +331,25 @@ Chỉ trả về bản dịch cuối cùng. Tuyệt đối KHÔNG giải thích,
 5. Văn phong: Chuyên nghiệp, chuẩn xác."""
 
 # ================== 7. HIỂN THỊ GIAO DIỆN CHÍNH ==================
-st.markdown(f'<div class="groq-title-container"><div class="groq-title">{ui["title"]}</div><div class="groq-subtitle">{ui["subtitle"]}</div></div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="groq-title-container">'
+    f'<div class="groq-title">{ui["title"]}</div>'
+    f'<div class="groq-subtitle">{ui["subtitle"]}</div>'
+    f'</div>',
+    unsafe_allow_html=True
+)
 
 col_l, col_btn, col_r = st.columns([2, 1, 2])
-with col_l: st.markdown(f"<h4 style='text-align: right; color: #a0a0a0;'>{ui['lang_left']}</h4>", unsafe_allow_html=True)
+with col_l:
+    st.markdown(f"<h4 style='text-align: right; color: #a0a0a0;'>{ui['lang_left']}</h4>", unsafe_allow_html=True)
 with col_btn:
     if st.button("⇄", use_container_width=True, help="Đảo chiều dịch"):
         st.session_state.is_jp_to_vi = not st.session_state.is_jp_to_vi
+        st.session_state.last_groq = ""
+        st.session_state.last_deep = ""
         st.rerun()
-with col_r: st.markdown(f"<h4 style='text-align: left; color: #00b4ff;'>{ui['lang_right']}</h4>", unsafe_allow_html=True)
+with col_r:
+    st.markdown(f"<h4 style='text-align: left; color: #00b4ff;'>{ui['lang_right']}</h4>", unsafe_allow_html=True)
 
 st.write("")
 
@@ -260,8 +358,12 @@ with col_clear:
     st.button(ui["btn_clear"], on_click=clear_text, use_container_width=True)
 
 with st.form(key='translation_form', clear_on_submit=False):
-    source_text = st.text_area(ui["label_input"], height=160, placeholder=ui["placeholder"], key="main_input", label_visibility="collapsed")
-   
+    source_text = st.text_area(
+        ui["label_input"], height=160,
+        placeholder=ui["placeholder"],
+        key="main_input",
+        label_visibility="collapsed"
+    )
     col1, col2 = st.columns([2, 1])
     with col1:
         mode = st.selectbox(ui["label_context"], ui["contexts"], label_visibility="collapsed")
@@ -270,57 +372,69 @@ with st.form(key='translation_form', clear_on_submit=False):
 
 # ================== 8. XỬ LÝ DỊCH ==================
 if submit_button and source_text.strip():
-    col_res_title, _ = st.columns([8, 1])
-    with col_res_title:
-        st.markdown(f'<div class="result-header"><span style="font-size: 22px;">🌊</span> KẾT QUẢ DỊCH</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="result-header"><span style="font-size: 22px;">🌊</span> KẾT QUẢ DỊCH</div>',
+        unsafe_allow_html=True
+    )
 
     col_groq, col_deep = st.columns(2)
-    groq_placeholder = col_groq.empty()
-    deep_placeholder = col_deep.empty()
+    groq_stream_placeholder = col_groq.empty()
+    deep_stream_placeholder = col_deep.empty()
 
     loading_placeholder = st.empty()
     with loading_placeholder:
-        st.markdown("""
-        <div class="ai-loading">
-            <div class="ai-orb-container"><div class="ai-orb"></div></div>
-            <div class="ai-text">Đang dịch bằng Groq ⚡ và DeepSeek 🐳...</div>
-            <div class="ai-dots">••••</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("⚡ Đang dịch bằng Groq và 🐳 DeepSeek...")
 
     try:
         target_lang = "Vietnamese" if st.session_state.is_jp_to_vi else "Japanese"
         prompt = f"Translate the following text into {target_lang} (Context/Style: {mode}):\n\n{source_text}"
 
-        # Groq
+        # ── Groq: stream vào markdown tạm, sau đó render result box ──
         groq_text = ""
-        for chunk in groq_client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], temperature=0.0, stream=True):
+        groq_stream_placeholder.markdown("⚡ **Groq** — Đang dịch...")
+        for chunk in groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}],
+            temperature=0.0,
+            stream=True
+        ):
             content = chunk.choices[0].delta.content or ""
             groq_text += content
-            
-            # Xử lý chuỗi an toàn tuyệt đối cho thuộc tính HTML và JS
-            safe_groq_copy = html.escape(json.dumps(groq_text))
-            
-            groq_placeholder.markdown(f'<div class="result-box"><strong>⚡ Groq</strong><br><br>{groq_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, {safe_groq_copy})">📋</button></div>', unsafe_allow_html=True)
+            # Hiển thị streaming tạm bằng markdown (không có copy button)
+            groq_stream_placeholder.markdown(
+                f"⚡ **Groq**\n\n{groq_text}",
+            )
 
-        # DeepSeek
+        # Render result box thật sự bên trong components.html (có copy hoạt động)
+        render_result_box(groq_stream_placeholder, "⚡ Groq", groq_text)
+
+        # ── DeepSeek: tương tự ──
         deep_text = ""
-        for chunk in deepseek_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], temperature=0.0, stream=True):
+        deep_stream_placeholder.markdown("🐳 **DeepSeek** — Đang dịch...")
+        for chunk in deepseek_client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}],
+            temperature=0.0,
+            stream=True
+        ):
             content = chunk.choices[0].delta.content or ""
             deep_text += content
-            
-            # Xử lý chuỗi an toàn tuyệt đối cho thuộc tính HTML và JS
-            safe_deep_copy = html.escape(json.dumps(deep_text))
-            
-            deep_placeholder.markdown(f'<div class="result-box"><strong>🐳 DeepSeek</strong><br><br>{deep_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, {safe_deep_copy})">📋</button></div>', unsafe_allow_html=True)
+            deep_stream_placeholder.markdown(
+                f"🐳 **DeepSeek**\n\n{deep_text}",
+            )
+
+        render_result_box(deep_stream_placeholder, "🐳 DeepSeek", deep_text)
 
         loading_placeholder.empty()
 
-        # Định nghĩa múi giờ Việt Nam (UTC+7)
-        tz_vn = timezone(timedelta(hours=7))
+        # Lưu vào session để re-render nếu cần
+        st.session_state.last_groq = groq_text
+        st.session_state.last_deep = deep_text
 
+        # Lưu lịch sử
+        tz_vn = timezone(timedelta(hours=7))
         st.session_state.history.append({
-            "time": datetime.now(tz_vn).strftime("%H:%M"), # Cập nhật giờ chuẩn VN
+            "time": datetime.now(tz_vn).strftime("%H:%M"),
             "source": source_text,
             "result": groq_text + "\n\n" + deep_text,
             "mode": mode
@@ -331,21 +445,25 @@ if submit_button and source_text.strip():
     except Exception as e:
         loading_placeholder.empty()
         st.error(f"Lỗi hệ thống: {str(e)}")
-else:
-    if submit_button:
-        st.warning(ui["warning"])
 
-# Script hỗ trợ copy hover
-st.markdown("""
-<script>
-function copyText(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
-        const original = btn.innerHTML;
-        btn.innerHTML = '✅';
-        setTimeout(() => { btn.innerHTML = original; }, 1500);
-    });
-}
-</script>
-""", unsafe_allow_html=True)
+elif submit_button:
+    st.warning(ui["warning"])
 
-st.markdown(f'<div style="text-align: center; color: #555; font-size: 12px; margin-top: 50px; font-weight: 500;">{ui["footer"]}</div>', unsafe_allow_html=True)
+# ── Hiển thị lại kết quả lần dịch trước (nếu có, tránh mất khi tương tác UI) ──
+elif st.session_state.last_groq and st.session_state.last_deep:
+    st.markdown(
+        '<div class="result-header"><span style="font-size: 22px;">🌊</span> KẾT QUẢ DỊCH</div>',
+        unsafe_allow_html=True
+    )
+    col_groq2, col_deep2 = st.columns(2)
+    with col_groq2:
+        groq_ph = st.empty()
+        render_result_box(groq_ph, "⚡ Groq", st.session_state.last_groq)
+    with col_deep2:
+        deep_ph = st.empty()
+        render_result_box(deep_ph, "🐳 DeepSeek", st.session_state.last_deep)
+
+st.markdown(
+    f'<div style="text-align: center; color: #555; font-size: 12px; margin-top: 50px; font-weight: 500;">{ui["footer"]}</div>',
+    unsafe_allow_html=True
+)
