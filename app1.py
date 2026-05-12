@@ -1,9 +1,10 @@
 import json
+import html
 import streamlit as st
 from openai import OpenAI
 import streamlit.components.v1 as components
-from datetime import datetime
 from datetime import datetime, timezone, timedelta
+
 # ================== 1. CẤU HÌNH TRANG & GIAO DIỆN ==================
 st.set_page_config(page_title="LSA Translator | Groq + DeepSeek", page_icon="🌊", layout="centered")
 
@@ -296,18 +297,26 @@ if submit_button and source_text.strip():
         for chunk in groq_client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], temperature=0.0, stream=True):
             content = chunk.choices[0].delta.content or ""
             groq_text += content
-            groq_placeholder.markdown(f'<div class="result-box"><strong>⚡ Groq</strong><br><br>{groq_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, `{groq_text.replace("`","\\`")}`)">📋</button></div>', unsafe_allow_html=True)
+            
+            # Xử lý chuỗi an toàn tuyệt đối cho thuộc tính HTML và JS
+            safe_groq_copy = html.escape(json.dumps(groq_text))
+            
+            groq_placeholder.markdown(f'<div class="result-box"><strong>⚡ Groq</strong><br><br>{groq_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, {safe_groq_copy})">📋</button></div>', unsafe_allow_html=True)
 
         # DeepSeek
         deep_text = ""
         for chunk in deepseek_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], temperature=0.0, stream=True):
             content = chunk.choices[0].delta.content or ""
             deep_text += content
-            deep_placeholder.markdown(f'<div class="result-box"><strong>🐳 DeepSeek</strong><br><br>{deep_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, `{deep_text.replace("`","\\`")}`)">📋</button></div>', unsafe_allow_html=True)
+            
+            # Xử lý chuỗi an toàn tuyệt đối cho thuộc tính HTML và JS
+            safe_deep_copy = html.escape(json.dumps(deep_text))
+            
+            deep_placeholder.markdown(f'<div class="result-box"><strong>🐳 DeepSeek</strong><br><br>{deep_text.replace(chr(10), "<br>")}<button class="hover-btn" onclick="copyText(this, {safe_deep_copy})">📋</button></div>', unsafe_allow_html=True)
 
         loading_placeholder.empty()
 
-     # Định nghĩa múi giờ Việt Nam (UTC+7)
+        # Định nghĩa múi giờ Việt Nam (UTC+7)
         tz_vn = timezone(timedelta(hours=7))
 
         st.session_state.history.append({
