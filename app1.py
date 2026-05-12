@@ -3,7 +3,7 @@ import streamlit as st
 from openai import OpenAI
 import streamlit.components.v1 as components
 from datetime import datetime
-
+from datetime import datetime, timezone, timedelta
 # ================== 1. CẤU HÌNH TRANG & GIAO DIỆN ==================
 st.set_page_config(page_title="LSA Translator | Groq + DeepSeek", page_icon="🌊", layout="centered")
 
@@ -307,8 +307,11 @@ if submit_button and source_text.strip():
 
         loading_placeholder.empty()
 
+     # Định nghĩa múi giờ Việt Nam (UTC+7)
+        tz_vn = timezone(timedelta(hours=7))
+
         st.session_state.history.append({
-            "time": datetime.now().strftime("%H:%M"),
+            "time": datetime.now(tz_vn).strftime("%H:%M"), # Cập nhật giờ chuẩn VN
             "source": source_text,
             "result": groq_text + "\n\n" + deep_text,
             "mode": mode
